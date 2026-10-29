@@ -108,7 +108,7 @@ function createDemoBackend() {
   const seed = {};
   Object.values(demoNames).flat().forEach(([n], i) => { seed[n] = { name: n, unit: ['台北市桌球協會', '新北市桌球隊', '台中市體育會'][i % 3], title: i % 4 === 0 ? '隊長' : '選手', photo_url: null }; });
   const people = demoPeopleApi(seed);
-  let user = null;
+  let user = (() => { try { return sessionStorage.getItem('demo_organizer') ? { email: ORGANIZER_EMAIL } : null; } catch { return null; } })(); // 示範模式：同一個分頁切換系統時保留主辦登入
   const listeners = new Set();
   return {
     isDemo: true,
@@ -119,8 +119,8 @@ function createDemoBackend() {
     subscribe() { return () => {}; },
     async getUser() { return user; },
     onAuthChange(cb) { listeners.add(cb); },
-    async signIn(password) { if (password !== DEMO_PASSWORD) throw new Error('密碼錯誤'); user = { email: ORGANIZER_EMAIL }; listeners.forEach((f) => f(user)); },
-    async signOut() { user = null; listeners.forEach((f) => f(null)); },
+    async signIn(password) { if (password !== DEMO_PASSWORD) throw new Error('密碼錯誤'); user = { email: ORGANIZER_EMAIL }; try { sessionStorage.setItem('demo_organizer', '1'); } catch { /* 忽略 */ } listeners.forEach((f) => f(user)); },
+    async signOut() { user = null; try { sessionStorage.removeItem('demo_organizer'); } catch { /* 忽略 */ } listeners.forEach((f) => f(null)); },
   };
 }
 
