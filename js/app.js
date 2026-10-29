@@ -1,5 +1,5 @@
 import { ORGANIZER_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf } from './people.js';
+import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const SYSTEMS = { singles: '單打賽', doubles: '雙打賽', team: '團體賽' };
@@ -11,10 +11,10 @@ const state = {
   busy: false,
   user: null,
   people: {}, // { 姓名: { unit, title, photo_url } }
+  results: {}, // { 姓名: [歷年成績] }
   joins: {}, // { 姓名: [{ sys, detail }] }：這個人在哪些比賽出現
   missingTable: false,
   query: '',
-  system: 'all',
 };
 
 const app = document.getElementById('app');
@@ -58,22 +58,25 @@ async function createSupabaseBackend() {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const people = peopleApi(sb);
+  const results = resultsApi(sb);
   // 某個系統的資料表不存在或讀不到時，當作沒有資料，其他照常顯示
   const rows = async (query) => { const { data, error } = await query; return error ? [] : data; };
   return {
     isDemo: false,
     async load() {
-      const [sg, teams, tlPlayers, tlTeams, ppl, probe] = await Promise.all([
+      const [sg, teams, tlPlayers, tlTeams, ppl, probe, resultsMap] = await Promise.all([
         rows(sb.from('sg_players').select('name, division')),
         rows(sb.from('teams').select('player_a, player_b, division')),
         rows(sb.from('tl_players').select('name, team_id')),
         rows(sb.from('tl_teams').select('id, name')),
         people.load(),
         sb.from('people').select('name').limit(1),
+        results.load(),
       ]);
       const teamName = Object.fromEntries(tlTeams.map((t) => [t.id, t.name]));
       return {
         people: ppl,
+        results: resultsMap,
         missingTable: !!probe.error,
         joins: buildJoins({
           singles: sg.map((p) => [p.name, DIVISIONS[p.division] || '']),
@@ -83,6 +86,9 @@ async function createSupabaseBackend() {
       };
     },
     savePerson: (name, patch) => people.save(name, patch),
+    removePerson: (name) => people.remove(name),
+    removeResult: (id) => results.remove(id),
+    removeBatch: (s, d, y, e) => results.removeBatch(s, d, y, e),
     uploadPhoto: (blob) => people.upload(blob),
     subscribe(onChange) {
       const channel = sb.channel('people-hub').on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, onChange).subscribe();
@@ -108,12 +114,21 @@ function createDemoBackend() {
   const seed = {};
   Object.values(demoNames).flat().forEach(([n], i) => { seed[n] = { name: n, unit: ['台北市桌球協會', '新北市桌球隊', '台中市體育會'][i % 3], title: i % 4 === 0 ? '隊長' : '選手', photo_url: null }; });
   const people = demoPeopleApi(seed);
+  const results = demoResultsApi([
+    { name: '陳志明', year: 2025, system: 'singles', division: 'competitive', place: 1, detail: null, event: '2025 秋季盃' },
+    { name: '陳志明', year: 2025, system: 'team', division: '', place: 2, detail: '東區鐵人', event: '2025 團體賽' },
+    { name: '林建宏', year: 2025, system: 'singles', division: 'competitive', place: 3, detail: null, event: '2025 秋季盃' },
+    { name: '王小明', year: 2025, system: 'doubles', division: 'competitive', place: 1, detail: '與 李大華 搭檔', event: '2025 秋季盃' },
+  ]);
   let user = (() => { try { return sessionStorage.getItem('demo_organizer') ? { email: ORGANIZER_EMAIL } : null; } catch { return null; } })(); // 示範模式：同一個分頁切換系統時保留主辦登入
   const listeners = new Set();
   return {
     isDemo: true,
     demoPassword: DEMO_PASSWORD,
-    async load() { return { people: await people.load(), missingTable: false, joins: buildJoins(demoNames) }; },
+    async load() { return { people: await people.load(), results: await results.load(), missingTable: false, joins: buildJoins(demoNames) }; },
+    async removeResult(id) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await results.remove(id); },
+    async removeBatch(s, d, y, e) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await results.removeBatch(s, d, y, e); },
+    async removePerson(name) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await people.remove(name); },
     async savePerson(name, patch) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await people.save(name, patch); },
     uploadPhoto: (blob) => people.upload(blob),
     subscribe() { return () => {}; },
@@ -157,7 +172,6 @@ function visibleNames() {
   const q = state.query.trim().toLowerCase();
   return allNames().filter((name) => {
     const prof = profileOf(state.people, name);
-    if (state.system !== 'all' && !(state.joins[name] || []).some((j) => j.sys === state.system)) return false;
     if (!q) return true;
     return [name, prof.unit, prof.title].some((s) => String(s || '').toLowerCase().includes(q));
   });
@@ -187,11 +201,9 @@ function gridHtml() {
   return `<p class="hub-count">${names.length} 位選手</p>
     <div class="player-grid">${names.map((name) => {
       const prof = profileOf(state.people, name);
-      const systems = [...new Set((state.joins[name] || []).map((j) => SYSTEMS[j.sys]))];
       return `<button type="button" class="pcard" data-action="profile" data-name="${esc(name)}">
         <span class="pcard-photo">${avatar(prof, 'cover')}</span>
-        <span class="pcard-tx"><b>${esc(name)}</b><small>${esc(prof.unit || '（未填單位）')}</small>${titleChip(prof.title)}
-          ${systems.length ? `<span class="sys-tags">${systems.map((s) => `<span class="ttl plain">${s}</span>`).join('')}</span>` : ''}</span>
+        <span class="pcard-tx"><b>${esc(name)}</b><small>${esc(prof.unit || '（未填單位）')}</small>${titleChip(prof.title)}</span>
       </button>`;
     }).join('')}</div>`;
 }
@@ -226,11 +238,9 @@ function render() {
       ${demo ? `<div class="banner demo">🧪 示範模式：資料只存在這個分頁，重新整理就會還原。主辦登入密碼：<b>${esc(backend.demoPassword)}</b></div>` : ''}
       ${state.missingTable ? `<div class="banner warn hub-missing">選手資料庫還沒建立，目前只能瀏覽名單。請主辦在 Supabase 的 SQL Editor 執行 <code>supabase/people.sql</code>。</div>` : ''}
       <section class="card">
+        ${isOrganizer() ? `<div class="section-head"><h3>選手名單</h3><span class="row-actions"><button class="btn small" data-action="batches">🏅 成績紀錄</button><button class="btn primary small" data-action="add-person">＋ 新增選手</button></span></div>` : ''}
         <div class="hub-tools">
           <input id="hub-search" class="hub-search" type="search" placeholder="搜尋姓名、單位或頭銜" value="${esc(state.query)}" aria-label="搜尋選手" autocomplete="off">
-          <div class="hub-filter" role="group" aria-label="依比賽篩選">
-            ${[['all', '全部'], ...Object.entries(SYSTEMS)].map(([key, label]) => `<button type="button" class="${state.system === key ? 'on' : ''}" data-action="filter" data-system="${key}" aria-pressed="${state.system === key}">${label}</button>`).join('')}
-          </div>
         </div>
         <div id="hub-grid">${gridHtml()}</div>
       </section>
@@ -278,7 +288,6 @@ function openLoginModal() {
 
 function openProfile(name) {
   const prof = profileOf(state.people, name);
-  const joins = state.joins[name] || [];
   openModal(`
     <div class="profile">
       <button type="button" class="profile-x" data-close aria-label="關閉">✕</button>
@@ -286,12 +295,17 @@ function openProfile(name) {
       <h2>${esc(name)}</h2>
       <p class="profile-unit">${esc(prof.unit || '（未填單位）')}</p>
       <p>${titleChip(prof.title)}</p>
-      <h3 class="profile-h">參加的比賽</h3>
-      ${joins.length ? `<ul class="join-list">${joins.map((j) => `<li>${SYSTEMS[j.sys]}${j.detail ? `<small>${esc(j.detail)}</small>` : ''}</li>`).join('')}</ul>` : '<p class="note">尚未加入任何比賽。</p>'}
-      ${isOrganizer() ? `<div class="modal-actions"><button type="button" class="btn" data-edit>✎ 編輯資料</button></div>` : ''}
+      ${resultsHtml(state.results[name], { removable: isOrganizer() })}
+      ${isOrganizer() ? `<div class="modal-actions"><button type="button" class="btn danger" data-delete>從資料庫刪除</button><button type="button" class="btn" data-edit>✎ 編輯資料</button></div>` : ''}
     </div>`,
   (modal, close) => {
     modal.querySelector('[data-edit]')?.addEventListener('click', () => { close(); openEdit(name); });
+    modal.querySelector('[data-delete]')?.addEventListener('click', () => { close(); removePerson(name); });
+    modal.querySelectorAll('[data-del-result]').forEach((b) => b.addEventListener('click', () => {
+      if (!confirm('確定刪除這筆成績？')) return;
+      close();
+      run(() => backend.removeResult(b.dataset.delResult), '已刪除這筆成績');
+    }));
   });
 }
 
@@ -309,6 +323,50 @@ function openEdit(name) {
   });
 }
 
+
+// 新增一位選手到資料庫（姓名、單位、頭銜、照片）
+function openCreate() {
+  openPersonEditor({
+    openModal,
+    person: { name: '', unit: null, title: null, photo_url: null },
+    onSave: async ({ name, unit, title, blob }) => {
+      if (!name) return false;
+      if (state.people[name] || state.joins[name]) { toast('資料庫已經有同名的選手，請直接編輯那一位', 'error'); return false; }
+      return run(async () => {
+        const photo_url = blob ? await backend.uploadPhoto(blob) : null;
+        await backend.savePerson(name, { unit, title, photo_url });
+      }, `已新增 ${name}`);
+    },
+  });
+}
+
+// 成績紀錄：列出每一批存入的成績，存錯或測試誤存時可以整批撤銷
+function openBatches() {
+  const list = batchesOf(state.results);
+  openModal(`
+    <h2>成績紀錄</h2>
+    <p class="note">每按一次「存入選手成績」就是一批。存錯或測試誤存的，可以整批撤銷。</p>
+    ${list.length ? `<ul class="batch-list">${list.map((b, i) => `
+      <li><span class="batch-tx"><b>${b.year} 年 ${esc(b.event || '（未命名賽事）')}</b>
+        <small>${SYSTEM_LABEL[b.system] || b.system}${b.division ? `・${DIVISION_LABEL[b.division] || b.division}` : ''}・${b.count} 筆</small></span>
+        <button type="button" class="btn small danger" data-undo="${i}">撤銷</button></li>`).join('')}</ul>` : '<p class="note">還沒有存入任何成績。</p>'}
+    <div class="modal-actions"><button type="button" class="btn" data-close>關閉</button></div>`,
+  (modal, close) => {
+    modal.querySelectorAll('[data-undo]').forEach((btn) => btn.addEventListener('click', () => {
+      const b = list[Number(btn.dataset.undo)];
+      if (!confirm(`確定撤銷「${b.year} 年 ${b.event || '（未命名賽事）'}」${SYSTEM_LABEL[b.system] || ''}${b.division ? DIVISION_LABEL[b.division] || '' : ''}的 ${b.count} 筆成績？`)) return;
+      close();
+      run(() => backend.removeBatch(b.system, b.division, b.year, b.event), '已撤銷這一批成績');
+    }));
+  });
+}
+
+function removePerson(name) {
+  const joined = (state.joins[name] || []).length;
+  const warn = joined ? `\n\n注意：${name} 已加入 ${joined} 項比賽。這只會刪除他的單位、頭銜與照片，不會從比賽名單移除。` : '';
+  if (!confirm(`確定從選手資料庫刪除「${name}」？${warn}`)) return;
+  run(() => backend.removePerson(name), '已從資料庫刪除');
+}
 // ---------------------------------------------------------------- 操作
 
 const actions = {
@@ -316,7 +374,8 @@ const actions = {
   login: openLoginModal,
   logout: async () => { await backend.signOut(); toast('已登出'); },
   profile: ({ name }) => openProfile(name),
-  filter: ({ system }) => { state.system = system; render(); },
+  'add-person': openCreate,
+  batches: openBatches,
 };
 
 app.addEventListener('click', (e) => {
