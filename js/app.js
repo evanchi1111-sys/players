@@ -1,4 +1,5 @@
 import { ORGANIZER_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
+import { resolveStage } from './bracket.js';
 import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
@@ -12,6 +13,7 @@ const state = {
   user: null,
   people: {}, // { 姓名: { unit, title, photo_url } }
   results: {}, // { 姓名: [歷年成績] }
+  active: {}, // { 姓名: [還在未完賽比賽名單裡的紀錄] }
   joins: {}, // { 姓名: [{ sys, detail }] }：這個人在哪些比賽出現
   missingTable: false,
   query: '',
@@ -54,6 +56,42 @@ async function run(task, successMessage) {
 
 // ---------------------------------------------------------------- 資料來源
 
+
+// 找出「還在未完賽比賽名單裡」的選手：{ 姓名: [{ label, status }] }。這些人暫時不能從資料庫刪除。
+// 判斷「完賽」：單打賽用賽程推算（所有對戰都已決出勝負或輪空）；雙打賽、團體賽看每場比賽是否都已完賽。
+// 比賽還沒產生賽程也算「尚未開賽」（選手已登記，不能刪）。
+function activeEvents({ sg, sgMatches, sgDivs, teams, dscMatches, tlPlayers, tlMatches }) {
+  const out = {};
+  const add = (name, label, status) => { if (name && status) (out[name] ||= []).push({ label, status }); };
+
+  const cfgOf = Object.fromEntries(sgDivs.map((d) => [d.id, d]));
+  const singlesStatus = (div) => {
+    const list = sgMatches.filter((m) => m.division === div);
+    const main = list.filter((m) => m.stage === 'main');
+    const group = list.filter((m) => m.stage === 'group');
+    const final = list.filter((m) => m.stage === 'final');
+    if (!main.length && !group.length) return '尚未開賽';
+    if (group.length && !final.length) return '預賽進行中';
+    const cfg = cfgOf[div] || {};
+    const best = cfg.best_of || 3;
+    const finished = (arr, bo) => !arr.length || [...resolveStage(arr, bo).values()].every((r) => r.state === 'done' || r.state === 'bye');
+    return finished(main, best) && finished(group, best) && finished(final, cfg.final_best_of || best) ? null : '進行中';
+  };
+  const singles = Object.fromEntries(Object.keys(DIVISIONS).map((d) => [d, singlesStatus(d)]));
+  for (const p of sg) add(p.name, `單打賽・${DIVISIONS[p.division] || ''}`, singles[p.division]);
+
+  const doublesStatus = (div) => {
+    const list = dscMatches.filter((m) => m.division === div);
+    if (!list.length) return '尚未開賽';
+    return list.every((m) => m.status === 'completed') ? null : '進行中';
+  };
+  const doubles = Object.fromEntries(Object.keys(DIVISIONS).map((d) => [d, doublesStatus(d)]));
+  for (const t of teams) for (const n of [t.player_a, t.player_b]) add(n, `雙打賽・${DIVISIONS[t.division] || ''}`, doubles[t.division]);
+
+  const teamStatus = !tlMatches.length ? '尚未開賽' : tlMatches.every((m) => m.status === 'completed') ? null : '進行中';
+  for (const p of tlPlayers) add(p.name, '團體賽', teamStatus);
+  return out;
+}
 async function createSupabaseBackend() {
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -64,7 +102,7 @@ async function createSupabaseBackend() {
   return {
     isDemo: false,
     async load() {
-      const [sg, teams, tlPlayers, tlTeams, ppl, probe, resultsMap] = await Promise.all([
+      const [sg, teams, tlPlayers, tlTeams, ppl, probe, resultsMap, sgMatches, sgDivs, dscMatches, tlMatches] = await Promise.all([
         rows(sb.from('sg_players').select('name, division')),
         rows(sb.from('teams').select('player_a, player_b, division')),
         rows(sb.from('tl_players').select('name, team_id')),
@@ -72,12 +110,17 @@ async function createSupabaseBackend() {
         people.load(),
         sb.from('people').select('name').limit(1),
         results.load(),
+        rows(sb.from('sg_matches').select('*')),
+        rows(sb.from('sg_divisions').select('*')),
+        rows(sb.from('matches').select('division, status')),
+        rows(sb.from('tl_matches').select('status')),
       ]);
       const teamName = Object.fromEntries(tlTeams.map((t) => [t.id, t.name]));
       return {
         people: ppl,
         results: resultsMap,
         missingTable: !!probe.error,
+        active: activeEvents({ sg, sgMatches, sgDivs, teams, dscMatches, tlPlayers, tlMatches }),
         joins: buildJoins({
           singles: sg.map((p) => [p.name, DIVISIONS[p.division] || '']),
           doubles: teams.flatMap((t) => [[t.player_a, DIVISIONS[t.division] || ''], [t.player_b, DIVISIONS[t.division] || '']]),
@@ -114,6 +157,8 @@ function createDemoBackend() {
   const seed = {};
   Object.values(demoNames).flat().forEach(([n], i) => { seed[n] = { name: n, unit: ['台北市桌球協會', '新北市桌球隊', '台中市體育會'][i % 3], title: i % 4 === 0 ? '隊長' : '選手', photo_url: null }; });
   const people = demoPeopleApi(seed);
+  // 示範：這幾位還在未完賽的比賽名單裡，不能刪除
+  const demoActive = { 王小明: [{ label: '雙打賽・競賽組', status: '進行中' }], 陳志明: [{ label: '單打賽・競賽組', status: '尚未開賽' }, { label: '團體賽', status: '進行中' }] };
   const results = demoResultsApi([
     { name: '陳志明', year: 2025, system: 'singles', division: 'competitive', place: 1, detail: null, event: '2025 秋季盃' },
     { name: '陳志明', year: 2025, system: 'team', division: '', place: 2, detail: '東區鐵人', event: '2025 團體賽' },
@@ -125,7 +170,7 @@ function createDemoBackend() {
   return {
     isDemo: true,
     demoPassword: DEMO_PASSWORD,
-    async load() { return { people: await people.load(), results: await results.load(), missingTable: false, joins: buildJoins(demoNames) }; },
+    async load() { return { people: await people.load(), results: await results.load(), missingTable: false, joins: buildJoins(demoNames), active: demoActive }; },
     async removeResult(id) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await results.remove(id); },
     async removeBatch(s, d, y, e) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await results.removeBatch(s, d, y, e); },
     async removePerson(name) { if (!user) throw new Error('沒有寫入權限，請重新登入主辦帳號'); await people.remove(name); },
@@ -166,7 +211,8 @@ async function reload() {
 // ---------------------------------------------------------------- 畫面
 
 // 所有姓名：三個系統出現過的人，加上資料庫裡有資料的人
-const allNames = () => [...new Set([...Object.keys(state.joins), ...Object.keys(state.people)])].sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+// 選手資料庫的名單就是 people 資料表裡的人；只出現在比賽名單、但沒有建立資料的人不列在這裡（比賽名單裡仍然看得到）
+const allNames = () => Object.keys(state.people).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
 
 function visibleNames() {
   const q = state.query.trim().toLowerCase();
@@ -197,7 +243,7 @@ function renderHeader() {
 
 function gridHtml() {
   const names = visibleNames();
-  if (!names.length) return `<div class="empty"><span aria-hidden="true">🏓</span><p>${state.query ? '找不到符合的選手。' : '還沒有選手資料。'}</p></div>`;
+  if (!names.length) return `<div class="empty"><span aria-hidden="true">🏓</span><p>${state.query ? '找不到符合的選手。' : (isOrganizer() ? '選手資料庫還沒有選手。請按「＋ 新增選手」建立；各比賽已經有的選手，可以在 Supabase 執行 people-import-existing.sql 一次放進資料庫。' : '還沒有選手資料。')}</p></div>`;
   return `<p class="hub-count">${names.length} 位選手</p>
     <div class="player-grid">${names.map((name) => {
       const prof = profileOf(state.people, name);
@@ -362,6 +408,18 @@ function openBatches() {
 }
 
 function removePerson(name) {
+  // 還在未完賽的比賽名單裡的選手，不能從資料庫刪除（先從名單拿掉，或等全部比賽完成）
+  const active = state.active[name] || [];
+  if (active.length) {
+    openModal(`
+      <h2>暫時不能刪除</h2>
+      <p>「${esc(name)}」還在下面的比賽名單裡：</p>
+      <ul class="join-list">${active.map((a) => `<li>${esc(a.label)}<small>${esc(a.status)}</small></li>`).join('')}</ul>
+      <p class="note">請先到該比賽的名單把他拿掉，或等該項目的全部比賽都完成後，再回來刪除。</p>
+      <div class="modal-actions"><button type="button" class="btn primary" data-close>知道了</button></div>`,
+    () => {});
+    return;
+  }
   const joined = (state.joins[name] || []).length;
   const warn = joined ? `\n\n注意：${name} 已加入 ${joined} 項比賽。這只會刪除他的單位、頭銜與照片，不會從比賽名單移除。` : '';
   if (!confirm(`確定從選手資料庫刪除「${name}」？${warn}`)) return;

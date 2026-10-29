@@ -22,3 +22,6 @@
 }
 @media (min-width: 960px) { .player-grid { grid-template-columns: repeat(5, 1fr); gap: 16px; } }
 @media (min-width: 1280px) { .player-grid { grid-template-columns: repeat(6, 1fr); } }
+.join-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 6px; }
+.join-list li { padding: 8px 12px; border-radius: 14px; background: #fff; font-weight: 700; }
+.join-list small { display: block; color: var(--sub, #666464); font-weight: 600; }
