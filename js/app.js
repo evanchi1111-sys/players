@@ -71,8 +71,9 @@ function activeEvents({ sg, sgMatches, sgDivs, teams, dscMatches, tlPlayers, tlM
     const group = list.filter((m) => m.stage === 'group');
     const final = list.filter((m) => m.stage === 'final');
     if (!main.length && !group.length) return '尚未開賽';
-    if (group.length && !final.length) return '預賽進行中';
     const cfg = cfgOf[div] || {};
+    if (cfg.format === 'roundrobin') return [...resolveStage(group, cfg.best_of || 3).values()].every((r) => r.state === 'done' || r.state === 'bye') ? null : '循環賽進行中';
+    if (group.length && !final.length) return '預賽進行中';
     const best = cfg.best_of || 3;
     const finished = (arr, bo) => !arr.length || [...resolveStage(arr, bo).values()].every((r) => r.state === 'done' || r.state === 'bye');
     return finished(main, best) && finished(group, best) && finished(final, cfg.final_best_of || best) ? null : '進行中';
