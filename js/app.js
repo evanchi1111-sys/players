@@ -1,5 +1,5 @@
 import { ORGANIZER_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-import { resolveStage } from './bracket.js';
+import { resolveStage } from './bracket.js?v=20261029s';
 import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js';
 
 const demo = new URLSearchParams(location.search).has('demo');
