@@ -1,0 +1,24 @@
+/* 選手資料庫頁專用樣式 */
+.hub-tools { display: grid; gap: 10px; margin-bottom: 14px; }
+.hub-search { width: 100%; min-height: 48px; padding: 0 16px; border-radius: 999px; }
+.hub-filter { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.hub-filter button { flex: none; min-height: 40px; padding: 0 16px; border: 1.5px solid #c5d5e6; border-radius: 999px; background: #fff; font: inherit; font-weight: 800; cursor: pointer; color: var(--text, #231F20); }
+.hub-filter button.on { background: var(--green, #3071B9); border-color: var(--green, #3071B9); color: #fff; }
+.hub-filter button:focus-visible { outline: 3px solid #3071B9; outline-offset: 2px; }
+.hub-count { margin: 0 4px 10px; color: var(--sub, #666464); font-weight: 700; }
+.join-list { list-style: none; margin: 8px 0 0; padding: 0; width: 100%; display: grid; gap: 6px; text-align: left; }
+.join-list li { padding: 8px 12px; border-radius: 14px; background: #fff; font-weight: 600; }
+.join-list small { display: block; color: var(--sub, #666464); font-weight: 500; }
+.sys-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.hub-missing { margin-bottom: 14px; }
+.brand-logo { width: 46px; height: 46px; }
+
+/* ================= 電腦版（螢幕寬度 ≥ 960px） ================= */
+@media (min-width: 960px) {
+  .container { width: min(1180px, 100% - 64px); }
+  .hub-tools { grid-template-columns: minmax(280px, 420px) 1fr; gap: 16px; align-items: center; margin-bottom: 18px; }
+  .hub-filter { justify-content: flex-start; }
+  .who-btn:hover .team { color: var(--green); text-decoration: underline; }
+}
+@media (min-width: 960px) { .player-grid { grid-template-columns: repeat(5, 1fr); gap: 16px; } }
+@media (min-width: 1280px) { .player-grid { grid-template-columns: repeat(6, 1fr); } }
