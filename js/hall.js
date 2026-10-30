@@ -8,6 +8,8 @@ const app = document.getElementById('app');
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' };
 const ORDER = ['singles', 'doubles', 'team'];
+// 從比賽網頁點進來時顯示「返回比賽」（直接開網址就不顯示）
+const cameFromSite = (() => { try { return !!document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1; } catch { return false; } })();
 const archiveKey = (system, division, year, event) => [system, division, year, event || ''].join('|');
 
 const state = { loaded: false, error: null, rows: [], people: {}, archives: new Map(), open: new Set(), year: 'all', system: 'all' };
@@ -181,6 +183,7 @@ function render() {
           <img class="brand-logo" src="img/logo-glow-96.png" srcset="img/logo-glow-96.png 1x, img/logo-glow-192.png 2x" width="46" height="46" alt="中龍鋼鐵">
           <div><h1>中龍鋼鐵 英雄榜</h1><p class="live">歷年各項比賽前三名</p></div>
         </div>
+        ${cameFromSite ? '<button type="button" class="btn small" data-back>← 返回比賽</button>' : ''}
       </div>
     </header>
     <main class="container">
@@ -216,6 +219,7 @@ function render() {
 }
 
 app.addEventListener('click', (e) => {
+  if (e.target.closest('[data-back]')) { history.back(); return; }
   const t = e.target.closest('[data-toggle]');
   if (t) { const k = t.dataset.toggle; if (state.open.has(k)) state.open.delete(k); else state.open.add(k); render(); return; }
   const f = e.target.closest('[data-filter]');
