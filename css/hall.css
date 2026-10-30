@@ -1,0 +1,29 @@
+/* 英雄榜頁專用樣式 */
+.hall-filters { display: grid; gap: 8px; }
+.hall-medals h3 small { font-weight: 600; color: var(--sub, #666464); margin-left: 6px; }
+.hall-medal-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.hall-medal-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: #f3f7fb; }
+.hall-medal-list .no { width: 22px; text-align: center; font-weight: 800; color: var(--sub, #666464); }
+.hall-who { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.hall-who b { font-weight: 800; overflow-wrap: anywhere; }
+.hall-who small { color: var(--sub, #666464); font-size: 12px; overflow-wrap: anywhere; }
+.hall-count { display: flex; gap: 10px; font-weight: 800; white-space: nowrap; font-size: 14px; }
+.hall-year { margin-top: 22px; }
+.hall-year h2 { margin: 0 0 8px 4px; font-size: 22px; font-weight: 900; color: #1f4f8a; }
+.hall-event { margin-bottom: 12px; }
+.hall-event h3 { margin: 0 0 10px; }
+.hall-blocks { display: grid; gap: 14px; }
+.hall-block h4 { margin: 0 0 6px; font-size: 14px; color: var(--sub, #666464); font-weight: 800; }
+.hall-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hall-win { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 14px; background: #f3f7fb; }
+.hall-win.place-1 { background: #fff4bf; }
+.hall-medal { font-size: 22px; line-height: 1; flex: none; }
+.hall-win .pair { flex: none; }
+
+@media (min-width: 960px) {
+  .container { width: min(1180px, 100% - 64px); }
+  .hall-filters { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .hall-blocks { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .hall-medal-list { grid-template-columns: 1fr 1fr; }
+}
+.hall-count span { min-width: 38px; }
