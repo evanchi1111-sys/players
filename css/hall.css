@@ -27,3 +27,17 @@
   .hall-medal-list { grid-template-columns: 1fr 1fr; }
 }
 .hall-count span { min-width: 38px; }
+.hall-toggle { margin-top: 8px; }
+.hall-archive { margin-top: 10px; padding: 10px; border-radius: 14px; background: #f3f7fb; }
+.hall-archive h5 { margin: 12px 0 6px; font-size: 14px; font-weight: 800; }
+.hall-archive h5:first-child, .hall-archive .note + h5 { margin-top: 4px; }
+.hall-archive .table-wrap { overflow-x: auto; }
+.hall-archive .rank-table { width: 100%; font-size: 13px; }
+.hall-matches { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hall-matches li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 12px; background: #fff; }
+.hm-round { font-size: 12px; font-weight: 800; color: var(--sub, #666464); }
+.hm-vs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hm-vs b { font-weight: 600; }
+.hm-vs b.w { font-weight: 900; color: #1f4f8a; }
+.hm-score { padding: 1px 8px; border-radius: 999px; background: #e3edf8; font-weight: 800; font-size: 13px; }
+.hall-matches small { color: var(--sub, #666464); }

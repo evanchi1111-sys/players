@@ -1,15 +1,16 @@
 // 英雄榜：彙整各年度、各項比賽的冠軍、亞軍、季軍（資料來自「存入選手成績」寫進 results 資料表）。
 // 任何人都可以瀏覽（results、people 資料表本來就是公開可讀），不需要登入；主辦登入後才會多出導覽列。
 import { SUPABASE_URL, SUPABASE_ANON_KEY, ORGANIZER_EMAIL } from './config.js';
-import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js';
+import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, archiveApi, demoArchiveApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js?v=20261030h';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const app = document.getElementById('app');
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const MEDAL = { 1: '🥇', 2: '🥈', 3: '🥉' };
 const ORDER = ['singles', 'doubles', 'team'];
+const archiveKey = (system, division, year, event) => [system, division, year, event || ''].join('|');
 
-const state = { loaded: false, error: null, rows: [], people: {}, year: 'all', system: 'all' };
+const state = { loaded: false, error: null, rows: [], people: {}, archives: new Map(), open: new Set(), year: 'all', system: 'all' };
 
 // ---------------------------------------------------------------- 資料
 
@@ -31,13 +32,40 @@ async function load() {
     ];
     state.people = await demoPeopleApi(seedPeople).load();
     state.rows = Object.values(await demoResultsApi(seed).load()).flat();
+    const demoSnap = {
+      formatLabel: '單淘汰賽・三局兩勝',
+      placings: [{ place: 1, name: '陳志明' }, { place: 2, name: '林建宏' }, { place: 3, name: '黃俊傑' }],
+      tables: [],
+      matches: [
+        { stage: '單淘汰賽', round: '準決賽', p1: '陳志明', p2: '黃俊傑', score: '2 : 0', games: '11:6、11:8', winner: '陳志明' },
+        { stage: '單淘汰賽', round: '準決賽', p1: '林建宏', p2: '周子豪', score: '2 : 1', games: '9:11、11:7、11:5', winner: '林建宏' },
+        { stage: '單淘汰賽', round: '決賽', p1: '陳志明', p2: '林建宏', score: '2 : 1', games: '11:9、8:11、11:6', winner: '陳志明' },
+        { stage: '單淘汰賽', round: '季軍賽', p1: '黃俊傑', p2: '周子豪', score: '2 : 0', games: '11:4、11:9', winner: '黃俊傑' },
+      ],
+    };
+    const demoSnap2 = {
+      formatLabel: '單循環賽・三局兩勝',
+      placings: [{ place: 1, name: '許家銘' }, { place: 2, name: '郭建志' }, { place: 3, name: '周子豪' }],
+      tables: [{ title: '循環賽排名', head: ['名次', '選手', '勝', '敗', '局數', '得失分', '判定依據'], rows: [[1, '許家銘', 2, 0, '4:0', '44:26', '勝場數'], [2, '郭建志', 1, 1, '2:2', '36:34', '勝場數'], [3, '周子豪', 0, 2, '0:4', '24:44', '勝場數']] }],
+      matches: [
+        { stage: '循環賽', round: '第 1 輪', p1: '許家銘', p2: '郭建志', score: '2 : 0', games: '11:6、11:8', winner: '許家銘' },
+        { stage: '循環賽', round: '第 2 輪', p1: '許家銘', p2: '周子豪', score: '2 : 0', games: '11:5、11:7', winner: '許家銘' },
+        { stage: '循環賽', round: '第 3 輪', p1: '郭建志', p2: '周子豪', score: '2 : 0', games: '11:9、11:8', winner: '郭建志' },
+      ],
+    };
+    const archives = await demoArchiveApi([
+      { system: 'singles', division: 'competitive', year: 2026, event: '2026 春季盃', snapshot: demoSnap },
+      { system: 'singles', division: 'fun', year: 2026, event: '2026 春季盃', snapshot: demoSnap2 },
+    ]).load();
+    state.archives = new Map(archives.map((a) => [archiveKey(a.system, a.division, a.year, a.event), a.snapshot]));
     return;
   }
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const [people, results] = await Promise.all([peopleApi(sb).load().catch(() => ({})), resultsApi(sb).load()]);
+  const [people, results, archives] = await Promise.all([peopleApi(sb).load().catch(() => ({})), resultsApi(sb).load(), archiveApi(sb).load().catch(() => [])]);
   state.people = people;
   state.rows = Object.values(results).flat();
+  state.archives = new Map(archives.map((a) => [archiveKey(a.system, a.division, a.year, a.event), a.snapshot]));
   try {
     const { data } = await sb.auth.getSession();
     organizer((data.session?.user?.email || '').toLowerCase() === ORGANIZER_EMAIL.toLowerCase());
@@ -109,10 +137,35 @@ function entryHtml(place, e) {
     </li>`;
 }
 
-function blockHtml(block) {
+// 賽事封存的完整結果：排名表 ＋ 每場比分
+function archiveHtml(snap) {
+  const tables = (snap.tables || []).filter((t) => t.rows?.length).map((t) => `
+    <h5>${esc(t.title)}</h5>
+    <div class="table-wrap"><table class="rank-table"><thead><tr>${t.head.map((h, i) => `<th class="${i === 1 ? 'left' : ''}">${esc(h)}</th>`).join('')}</tr></thead>
+      <tbody>${t.rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i === 1 ? 'left' : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`).join('');
+  const stages = new Map();
+  for (const m of snap.matches || []) {
+    const list = stages.get(m.stage) || stages.set(m.stage, []).get(m.stage);
+    list.push(m);
+  }
+  const matches = [...stages].map(([stage, list]) => `
+    <h5>${esc(stage)}</h5>
+    <ul class="hall-matches">${list.map((m) => `
+      <li><span class="hm-round">${esc(m.round)}</span>
+        <span class="hm-vs"><b class="${m.winner === m.p1 ? 'w' : ''}">${esc(m.p1)}</b><span class="hm-score">${esc(m.score)}</span><b class="${m.winner === m.p2 ? 'w' : ''}">${esc(m.p2)}</b></span>
+        ${m.games ? `<small>${esc(m.games)}</small>` : ''}
+        ${(m.lines || []).map((l) => `<small>${esc(l)}</small>`).join('')}</li>`).join('')}</ul>`).join('');
+  return `<div class="hall-archive">${snap.formatLabel ? `<p class="note">${esc(snap.formatLabel)}</p>` : ''}${tables}${matches}</div>`;
+}
+
+function blockHtml(block, year, event) {
   const label = `${SYSTEM_LABEL[block.system] || block.system}${block.division ? `・${DIVISION_LABEL[block.division] || block.division}` : ''}`;
   const items = [1, 2, 3].flatMap((p) => entriesOf(block.system, block.places[p]).map((e) => entryHtml(p, e)));
-  return `<div class="hall-block"><h4>${esc(label)}</h4><ul class="hall-list">${items.join('')}</ul></div>`;
+  const key = archiveKey(block.system, block.division, year, event === '（未命名賽事）' ? '' : event);
+  const snap = state.archives.get(key);
+  const open = state.open.has(key);
+  return `<div class="hall-block"><h4>${esc(label)}</h4><ul class="hall-list">${items.join('')}</ul>
+    ${snap ? `<button type="button" class="btn small hall-toggle" data-toggle="${esc(key)}" aria-expanded="${open}">${open ? '收合完整結果 ▲' : '查看完整結果 ▼'}</button>${open ? archiveHtml(snap) : ''}` : ''}</div>`;
 }
 
 function render() {
@@ -156,13 +209,15 @@ function render() {
           ${[...events].map(([event, blocks]) => `
             <article class="card hall-event">
               <h3>${esc(event)}</h3>
-              <div class="hall-blocks">${[...blocks.values()].sort((a, b) => ORDER.indexOf(a.system) - ORDER.indexOf(b.system) || (a.division === 'competitive' ? 0 : 1) - (b.division === 'competitive' ? 0 : 1)).map(blockHtml).join('')}</div>
+              <div class="hall-blocks">${[...blocks.values()].sort((a, b) => ORDER.indexOf(a.system) - ORDER.indexOf(b.system) || (a.division === 'competitive' ? 0 : 1) - (b.division === 'competitive' ? 0 : 1)).map((b) => blockHtml(b, year, event)).join('')}</div>
             </article>`).join('')}
         </section>`).join('')}`}`}
     </main>`;
 }
 
 app.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) { const k = t.dataset.toggle; if (state.open.has(k)) state.open.delete(k); else state.open.add(k); render(); return; }
   const f = e.target.closest('[data-filter]');
   if (f) { state[f.dataset.filter] = f.dataset.value; render(); return; }
   if (e.target.closest('[data-action="retry"]')) init();

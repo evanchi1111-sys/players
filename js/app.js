@@ -1,6 +1,6 @@
 import { ORGANIZER_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { resolveStage } from './bracket.js?v=20261029s';
-import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js';
+import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, archiveApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js?v=20261030h';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const SYSTEMS = { singles: '單打賽', doubles: '雙打賽', team: '團體賽' };
@@ -98,6 +98,7 @@ async function createSupabaseBackend() {
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const people = peopleApi(sb);
   const results = resultsApi(sb);
+  const archive = archiveApi(sb);
   // 某個系統的資料表不存在或讀不到時，當作沒有資料，其他照常顯示
   const rows = async (query) => { const { data, error } = await query; return error ? [] : data; };
   return {
@@ -132,7 +133,8 @@ async function createSupabaseBackend() {
     savePerson: (name, patch) => people.save(name, patch),
     removePerson: (name) => people.remove(name),
     removeResult: (id) => results.remove(id),
-    removeBatch: (s, d, y, e) => results.removeBatch(s, d, y, e),
+    // 撤銷成績時，同一批的封存結果也一起刪掉
+    removeBatch: async (s, d, y, e) => { await results.removeBatch(s, d, y, e); await archive.removeBatch(s, d, y, e); },
     uploadPhoto: (blob) => people.upload(blob),
     subscribe(onChange) {
       const channel = sb.channel('people-hub').on('postgres_changes', { event: '*', schema: 'public', table: 'people' }, onChange).subscribe();
