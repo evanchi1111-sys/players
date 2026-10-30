@@ -1,7 +1,7 @@
 // 英雄榜：彙整各年度、各項比賽的冠軍、亞軍、季軍（資料來自「存入選手成績」寫進 results 資料表）。
 // 任何人都可以瀏覽（results、people 資料表本來就是公開可讀），不需要登入；主辦登入後才會多出導覽列。
 import { SUPABASE_URL, SUPABASE_ANON_KEY, ORGANIZER_EMAIL } from './config.js';
-import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, archiveApi, demoArchiveApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js?v=20261030h';
+import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, archiveApi, demoArchiveApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js?v=20261030i';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const app = document.getElementById('app');
