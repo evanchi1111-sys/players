@@ -142,6 +142,15 @@ function buildYears() {
     const block = blocks.get(bkey) || blocks.set(bkey, { system: r.system, division: r.division, places: { 1: [], 2: [], 3: [] } }).get(bkey);
     block.places[r.place]?.push(r);
   }
+  // 只有照片、還沒存入成績的賽事也要出現（只在沒篩選項目時）
+  if (state.system === 'all') {
+    for (const m of state.media) {
+      if (state.year !== 'all' && m.year !== Number(state.year)) continue;
+      const events = years.get(m.year) || years.set(m.year, new Map()).get(m.year);
+      const key = m.event || '（未命名賽事）';
+      if (!events.has(key)) events.set(key, new Map());
+    }
+  }
   return [...years].sort((a, b) => b[0] - a[0]);
 }
 
@@ -231,9 +240,14 @@ function mediaHtml(year, event) {
   </div>`;
 }
 
+// 主辦：還沒存入成績的賽事也可以先建相簿
+function albumBtn() {
+  return state.org ? '<div class="hall-album-bar"><button type="button" class="btn primary" data-action="new-album">➕ 新增賽事相簿</button><small>賽事還沒存入成績，也可以先放照片。</small></div>' : '';
+}
+
 function render() {
   const all = state.rows;
-  const years = [...new Set(all.map((r) => r.year))].sort((a, b) => b - a);
+  const years = [...new Set([...all.map((r) => r.year), ...state.media.map((m) => m.year)])].sort((a, b) => b - a);
   const chip = (kind, value, label) => `<button type="button" class="${String(state[kind]) === String(value) ? 'on' : ''}" data-filter="${kind}" data-value="${value}">${esc(label)}</button>`;
   const grouped = buildYears();
   const medals = medalTable();
@@ -254,8 +268,9 @@ function render() {
       ${demo ? '<div class="banner demo">🧪 示範模式：這是範例資料，不是真正的成績。</div>' : ''}
       ${!state.loaded ? '<div class="center-card"><div class="spinner" aria-hidden="true"></div><p>載入中…</p></div>'
         : state.error ? `<div class="center-card"><h2>無法讀取資料</h2><p>${esc(state.error)}</p><button class="btn primary" data-action="retry">重新載入</button></div>`
-        : !all.length ? '<div class="empty"><span aria-hidden="true">🏆</span><p>還沒有成績紀錄。比賽結束後，由主辦按「存入選手成績」，這裡就會出現。</p></div>'
+        : !all.length && !state.media.length ? `${albumBtn()}<div class="empty"><span aria-hidden="true">🏆</span><p>還沒有成績紀錄。比賽結束後，由主辦按「存入選手成績」，這裡就會出現。</p></div>`
         : `
+      ${albumBtn()}
       <section class="card">
         <div class="hall-filters">
           <div class="hub-filter" aria-label="年度">${chip('year', 'all', '全部年度')}${years.map((y) => chip('year', y, `${y} 年`)).join('')}</div>
@@ -263,13 +278,13 @@ function render() {
         </div>
       </section>
       ${!grouped.length ? '<div class="empty"><span aria-hidden="true">🏆</span><p>這個條件下沒有成績紀錄。</p></div>' : `
-      <section class="card hall-medals">
+      ${medals.length ? `<section class="card hall-medals">
         <h3>🏅 累計獎牌榜 <small>前 ${medals.length} 名</small></h3>
         <ol class="hall-medal-list">${medals.map((m, i) => `
           <li><span class="no">${i + 1}</span>${avatar(person(m.name), 'sm')}
             <span class="hall-who"><b>${esc(m.name)}</b>${person(m.name).unit ? `<small>${esc(person(m.name).unit)}</small>` : ''}</span>
             <span class="hall-count"><span>🥇 ${m[1]}</span><span>🥈 ${m[2]}</span><span>🥉 ${m[3]}</span></span></li>`).join('')}</ol>
-      </section>
+      </section>` : ''}
       ${grouped.map(([year, events]) => `
         <section class="hall-year">
           <h2>${year} 年</h2>
@@ -277,6 +292,7 @@ function render() {
           ${[...events].map(([event, blocks]) => `
             <article class="card hall-event">
               <h3>${esc(event)}</h3>
+              ${blocks.size ? '' : '<p class="note">這場賽事的成績還沒存入，目前只有照片。</p>'}
               <div class="hall-blocks">${[...blocks.values()].sort((a, b) => ORDER.indexOf(a.system) - ORDER.indexOf(b.system) || (a.division === 'competitive' ? 0 : 1) - (b.division === 'competitive' ? 0 : 1)).map((b) => blockHtml(b, year, event)).join('')}</div>
               ${mediaHtml(year, event)}
             </article>`).join('')}
@@ -416,6 +432,29 @@ app.addEventListener('change', (e) => {
   if (files.length) uploadFiles(input.dataset.upload, files);
 });
 
+function openAlbum() {
+  openModal(`
+    <h2>新增賽事相簿</h2>
+    <form>
+      <label>賽事名稱（必填，例：2026 春季盃）<input name="event" maxlength="30" required autocomplete="off"></label>
+      <label>年度<input name="year" type="number" min="2000" max="2100" required value="${new Date().getFullYear()}"></label>
+      <label>照片（可多選）<input name="files" type="file" accept="image/*" multiple required></label>
+      <p class="note">名稱與年度要和之後「存入選手成績」填的一樣，照片才會歸在同一場賽事。</p>
+      <div class="modal-actions"><button type="button" class="btn" data-close>取消</button><button class="btn primary">上傳</button></div>
+    </form>`,
+  (modal, close) => {
+    modal.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const files = [...f.files.files];
+      const event = f.event.value.trim();
+      if (!event || !files.length) return;
+      close();
+      uploadFiles(mediaKey(Number(f.year.value), event), files);
+    });
+  });
+}
+
 function editCaption(item) {
   openModal(`
     <h2>照片說明</h2>
@@ -460,6 +499,7 @@ app.addEventListener('click', (e) => {
   if (cap) { editCaption(cap); return; }
   const del = byId('data-del-media');
   if (del) { removeMedia(del); return; }
+  if (e.target.closest('[data-action="new-album"]')) { openAlbum(); return; }
   if (e.target.closest('[data-action="login"]')) { openLogin(); return; }
   if (e.target.closest('[data-action="logout"]')) {
     api.signOut().finally(() => { state.org = false; organizer(false); render(); toast('已登出主辦'); });
