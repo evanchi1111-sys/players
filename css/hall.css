@@ -41,3 +41,8 @@
 .hm-vs b.w { font-weight: 900; color: #1f4f8a; }
 .hm-score { padding: 1px 8px; border-radius: 999px; background: #e3edf8; font-weight: 800; font-size: 13px; }
 .hall-matches small { color: var(--sub, #666464); }
+/* 年度、項目篩選按鈕（和選手資料庫相同的膠囊樣式） */
+.hub-filter { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.hub-filter button { flex: none; min-height: 40px; padding: 0 16px; border: 1.5px solid #c5d5e6; border-radius: 999px; background: #fff; font: inherit; font-weight: 800; cursor: pointer; color: var(--text, #231F20); }
+.hub-filter button.on { background: var(--green, #3071B9); border-color: var(--green, #3071B9); color: #fff; }
+.hub-filter button:focus-visible { outline: 3px solid #3071B9; outline-offset: 2px; }
