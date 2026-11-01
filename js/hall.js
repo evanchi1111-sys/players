@@ -256,7 +256,7 @@ function render() {
       <div class="container topbar-inner">
         <div class="brand">
           <img class="brand-logo" src="img/logo-glow-96.png" srcset="img/logo-glow-96.png 1x, img/logo-glow-192.png 2x" width="46" height="46" alt="中龍鋼鐵">
-          <div><h1>中龍鋼鐵 英雄榜</h1><p class="live">歷年各項比賽前三名</p></div>
+          <div><h1>中龍鋼鐵桌球社 英雄榜</h1><p class="live">歷年各項比賽前三名</p></div>
         </div>
         <div class="hall-head-actions">
           ${cameFromSite ? '<button type="button" class="btn small" data-back>← 返回比賽</button>' : ''}

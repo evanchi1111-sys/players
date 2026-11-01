@@ -233,7 +233,7 @@ function renderHeader() {
         <div class="brand">
           <img class="brand-logo" src="img/logo-glow-96.png" srcset="img/logo-glow-96.png 1x, img/logo-glow-192.png 2x" width="46" height="46" alt="中龍鋼鐵">
           <div>
-            <h1>中龍鋼鐵 選手資料庫</h1>
+            <h1>中龍鋼鐵桌球社 選手資料庫</h1>
             <p class="live">單打、雙打、團體賽共用</p>
           </div>
         </div>
