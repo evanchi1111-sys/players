@@ -46,3 +46,47 @@
 .hub-filter button { flex: none; min-height: 40px; padding: 0 16px; border: 1.5px solid #c5d5e6; border-radius: 999px; background: #fff; font: inherit; font-weight: 800; cursor: pointer; color: var(--text, #231F20); }
 .hub-filter button.on { background: var(--green, #3071B9); border-color: var(--green, #3071B9); color: #fff; }
 .hub-filter button:focus-visible { outline: 3px solid #3071B9; outline-offset: 2px; }
+
+/* ---------- 賽事照片、年度封面橫幅、大圖檢視 ---------- */
+.hall-head-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.hall-banner { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 0 12px; padding-bottom: 4px; scrollbar-width: thin; }
+.hb-slide { position: relative; flex: 0 0 100%; scroll-snap-align: start; aspect-ratio: 16 / 6; min-height: 120px; border: 0; padding: 0; border-radius: 22px; overflow: hidden; cursor: pointer; background: #dfe9f4; box-shadow: 0 6px 18px rgba(31, 79, 138, .18); }
+.hb-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hb-slide::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to top, rgba(8, 20, 40, .72), rgba(8, 20, 40, 0) 55%); }
+.hb-cap { position: absolute; left: 16px; right: 16px; bottom: 12px; z-index: 1; display: grid; gap: 1px; text-align: left; color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, .5); }
+.hb-cap b { font-size: 18px; font-weight: 900; }
+.hb-cap small { font-size: 13px; opacity: .92; }
+.hb-slide:focus-visible, .hm-thumb:focus-visible { outline: 3px solid #3071B9; outline-offset: 2px; }
+
+.hall-media { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #c5d5e6; }
+.hm-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hm-bar .hall-toggle { margin-top: 0; }
+.hm-add { cursor: pointer; }
+.hm-add.is-busy { opacity: .6; pointer-events: none; }
+.hm-quota { color: var(--sub, #666464); font-size: 12px; }
+.hm-grid { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); }
+.hm-grid li { position: relative; }
+.hm-thumb { position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 14px; overflow: hidden; cursor: pointer; background: #dfe9f4; }
+.hm-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+.hm-thumb:hover img { transform: scale(1.04); }
+.hm-star { position: absolute; top: 6px; left: 6px; padding: 2px 8px; border-radius: 999px; background: #ffd23f; color: #3b2f00; font-size: 12px; font-weight: 800; }
+.hm-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 6px; background: linear-gradient(to top, rgba(0, 0, 0, .65), transparent); color: #fff; font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hm-tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+.hm-tools button { width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #1f4f8a; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); }
+.hm-tools button[data-del-media] { color: #b3261e; }
+@media (min-width: 640px) { .hm-grid { grid-template-columns: repeat(4, 1fr); } .hb-slide { flex-basis: 100%; } }
+@media (min-width: 960px) { .hm-grid { grid-template-columns: repeat(6, 1fr); } .hb-slide { aspect-ratio: 16 / 5; } }
+
+body.lb-open { overflow: hidden; }
+.lb { position: fixed; inset: 0; z-index: 80; background: rgba(5, 10, 18, .94); display: grid; place-items: center; padding: 56px 12px 16px; }
+.lb-fig { margin: 0; display: grid; gap: 8px; justify-items: center; max-width: 100%; max-height: 100%; }
+.lb-fig img { max-width: 100%; max-height: calc(100vh - 150px); object-fit: contain; border-radius: 8px; }
+.lb-fig figcaption { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; justify-content: center; color: #e8eef6; font-size: 14px; }
+.lb-fig figcaption b { font-weight: 800; }
+.lb-fig figcaption small { opacity: .7; }
+.lb-x { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .16); color: #fff; font-size: 20px; cursor: pointer; }
+.lb-nav { position: absolute; top: 50%; width: 48px; height: 64px; margin-top: -32px; border: 0; border-radius: 14px; background: rgba(255, 255, 255, .14); color: #fff; font-size: 34px; line-height: 1; cursor: pointer; }
+.lb-prev { left: 8px; }
+.lb-next { right: 8px; }
+.lb-x:hover, .lb-nav:hover { background: rgba(255, 255, 255, .28); }
+@media (max-width: 520px) { .lb-nav { width: 40px; height: 56px; font-size: 28px; } }
