@@ -13,7 +13,7 @@ const ORDER = ['singles', 'doubles', 'team'];
 const cameFromSite = (() => { try { return !!document.referrer && new URL(document.referrer).origin === location.origin && history.length > 1; } catch { return false; } })();
 const archiveKey = (system, division, year, event) => [system, division, year, event || ''].join('|');
 
-const state = { loaded: false, error: null, rows: [], people: {}, archives: new Map(), open: new Set(), year: 'all', system: 'all', media: [], openMedia: new Set(), org: false, uploading: '', lb: null };
+const state = { loaded: false, error: null, rows: [], people: {}, archives: new Map(), open: new Set(), year: 'all', system: 'all', division: 'all', media: [], openMedia: new Set(), org: false, uploading: '', lb: null };
 let api = { media: null, signIn: async () => {}, signOut: async () => {} }; // 照片與登入（依示範／正式模式在 load() 裡設定）
 const mediaKey = (year, event) => `${year}|${event === '（未命名賽事）' ? '' : event}`;
 const splitKey = (key) => { const i = key.indexOf('|'); return [Number(key.slice(0, i)), key.slice(i + 1)]; };
@@ -109,7 +109,7 @@ function organizer(isOrg) { document.dispatchEvent(new CustomEvent('site-organiz
 
 // ---------------------------------------------------------------- 彙整
 
-const visibleRows = () => state.rows.filter((r) => (state.year === 'all' || r.year === Number(state.year)) && (state.system === 'all' || r.system === state.system));
+const visibleRows = () => state.rows.filter((r) => (state.year === 'all' || r.year === Number(state.year)) && (state.system === 'all' || r.system === state.system) && (state.division === 'all' || r.division === state.division));
 
 // 一個名次底下的「得獎者」：單打每人一筆、雙打兩人一組、團體賽以隊名為一組
 function entriesOf(system, rows) {
@@ -143,7 +143,7 @@ function buildYears() {
     block.places[r.place]?.push(r);
   }
   // 只有照片、還沒存入成績的賽事也要出現（只在沒篩選項目時）
-  if (state.system === 'all') {
+  if (state.system === 'all' && state.division === 'all') {
     for (const m of state.media) {
       if (state.year !== 'all' && m.year !== Number(state.year)) continue;
       const events = years.get(m.year) || years.set(m.year, new Map()).get(m.year);
@@ -154,13 +154,20 @@ function buildYears() {
   return [...years].sort((a, b) => b[0] - a[0]);
 }
 
-function medalTable() {
-  const tally = new Map();
+// 獎牌榜依組別分開計算：競賽組、歡樂成長組、團體賽（沒有組別）各一份，避免不同組別的選手混在同一份名次
+function medalTables() {
+  const groups = new Map();
   for (const r of visibleRows()) {
-    const t = tally.get(r.name) || tally.set(r.name, { name: r.name, 1: 0, 2: 0, 3: 0 }).get(r.name);
+    const g = groups.get(r.division || '') || groups.set(r.division || '', new Map()).get(r.division || '');
+    const t = g.get(r.name) || g.set(r.name, { name: r.name, 1: 0, 2: 0, 3: 0 }).get(r.name);
     t[r.place]++;
   }
-  return [...tally.values()].sort((a, b) => b[1] - a[1] || b[2] - a[2] || b[3] - a[3] || a.name.localeCompare(b.name, 'zh-Hant')).slice(0, 10);
+  const order = ['competitive', 'fun', ''];
+  return [...groups].sort((a, b) => (order.indexOf(a[0]) + 99) % 99 - (order.indexOf(b[0]) + 99) % 99).map(([division, tally]) => ({
+    division,
+    label: division ? (DIVISION_LABEL[division] || division) : '團體賽',
+    list: [...tally.values()].sort((a, b) => b[1] - a[1] || b[2] - a[2] || b[3] - a[3] || a.name.localeCompare(b.name, 'zh-Hant')).slice(0, 10),
+  }));
 }
 
 // ---------------------------------------------------------------- 畫面
@@ -250,7 +257,7 @@ function render() {
   const years = [...new Set([...all.map((r) => r.year), ...state.media.map((m) => m.year)])].sort((a, b) => b - a);
   const chip = (kind, value, label) => `<button type="button" class="${String(state[kind]) === String(value) ? 'on' : ''}" data-filter="${kind}" data-value="${value}">${esc(label)}</button>`;
   const grouped = buildYears();
-  const medals = medalTable();
+  const medalSets = medalTables();
   app.innerHTML = `
     <header class="topbar">
       <div class="container topbar-inner">
@@ -275,16 +282,17 @@ function render() {
         <div class="hall-filters">
           <div class="hub-filter" aria-label="年度">${chip('year', 'all', '全部年度')}${years.map((y) => chip('year', y, `${y} 年`)).join('')}</div>
           <div class="hub-filter" aria-label="項目">${chip('system', 'all', '全部項目')}${Object.entries(SYSTEM_LABEL).map(([k, l]) => chip('system', k, l)).join('')}</div>
+          <div class="hub-filter" aria-label="組別">${chip('division', 'all', '全部組別')}${Object.entries(DIVISION_LABEL).map(([k, l]) => chip('division', k, l)).join('')}</div>
         </div>
       </section>
       ${!grouped.length ? '<div class="empty"><span aria-hidden="true">🏆</span><p>這個條件下沒有成績紀錄。</p></div>' : `
-      ${medals.length ? `<section class="card hall-medals">
-        <h3>🏅 累計獎牌榜 <small>前 ${medals.length} 名</small></h3>
-        <ol class="hall-medal-list">${medals.map((m, i) => `
+      ${medalSets.map((set) => `<section class="card hall-medals">
+        <h3>🏅 ${esc(set.label)} 獎牌榜 <small>前 ${set.list.length} 名</small></h3>
+        <ol class="hall-medal-list">${set.list.map((m, i) => `
           <li><span class="no">${i + 1}</span>${avatar(person(m.name), 'sm')}
             <span class="hall-who"><b>${esc(m.name)}</b>${person(m.name).unit ? `<small>${esc(person(m.name).unit)}</small>` : ''}</span>
             <span class="hall-count"><span>🥇 ${m[1]}</span><span>🥈 ${m[2]}</span><span>🥉 ${m[3]}</span></span></li>`).join('')}</ol>
-      </section>` : ''}
+      </section>`).join('')}
       ${grouped.map(([year, events]) => `
         <section class="hall-year">
           <h2>${year} 年</h2>
