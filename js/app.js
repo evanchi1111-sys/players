@@ -1,6 +1,6 @@
 import { ORGANIZER_EMAIL, SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 import { resolveStage } from './bracket.js?v=20261029s';
-import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, archiveApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js?v=20261030i';
+import { avatar, titleChip, openPersonEditor, peopleApi, demoPeopleApi, profileOf, resultsApi, demoResultsApi, archiveApi, resultsHtml, batchesOf, SYSTEM_LABEL, DIVISION_LABEL } from './people.js?v=20261103a';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const SYSTEMS = { singles: '單打賽', doubles: '雙打賽', team: '團體賽' };

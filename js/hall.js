@@ -2,7 +2,7 @@
 // 任何人都可以瀏覽（results、people 資料表本來就是公開可讀），不需要登入；主辦登入後才會多出導覽列。
 import { SUPABASE_URL, SUPABASE_ANON_KEY, ORGANIZER_EMAIL } from './config.js';
 import { mediaApi, demoMediaApi, demoPhoto, resizeImage, MAX_PER_EVENT } from './media.js?v=20261102b';
-import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, archiveApi, demoArchiveApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js?v=20261030i';
+import { avatar, profileOf, peopleApi, demoPeopleApi, resultsApi, demoResultsApi, archiveApi, demoArchiveApi, SYSTEM_LABEL, DIVISION_LABEL, PLACE_LABEL } from './people.js?v=20261103a';
 
 const demo = new URLSearchParams(location.search).has('demo');
 const app = document.getElementById('app');
